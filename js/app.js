@@ -34,6 +34,7 @@ const state = {
   discoveryQuery: "",
   discoveryType: "cafe",
   discoveryResults: [],
+  nearbyResults: [],
   selectedCategory: "All",
   user: null,
   trips: [],
@@ -189,6 +190,16 @@ function bindGlobalEvents() {
       return;
     }
 
+    if (action === "add-nearby-to-trip") {
+      addNearbyToTrip(Number(placeIndex));
+      return;
+    }
+
+    if (action === "save-nearby-to-favorite") {
+      saveNearbyToFavorite(Number(placeIndex));
+      return;
+    }
+
     if (action === "add-place-to-memory") {
       addDiscoveryPlaceToMemory(Number(placeIndex));
       return;
@@ -265,6 +276,7 @@ function hydrateUserData() {
   state.trips = getTripsByUser(state.user.id);
   state.memories = getMemoriesByUser(state.user.id);
   state.favorites = getFavoritesByUser(state.user.id);
+  state.nearbyResults = [];
   if (!state.memoryDraft.memoryDate) state.memoryDraft.memoryDate = todayIso();
 }
 
@@ -523,6 +535,70 @@ function saveCurrentPin() {
   render();
 }
 
+async function loadNearbyRecommendations(lat, lng) {
+  state.discoveryStatus = t("status_loading_nearby");
+  state.discoveryStatusType = "";
+  render();
+
+  const query = `
+    [out:json][timeout:25];
+    (
+      node(around:10000,${lat},${lng})["amenity"~"cafe|restaurant|fast_food|bar"];
+      node(around:10000,${lat},${lng})["tourism"~"attraction|museum|viewpoint|gallery"];
+      node(around:10000,${lat},${lng})["leisure"~"park"];
+    );
+    out body 40;
+  `;
+
+  try {
+    const response = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: query
+    });
+    const data = await response.json();
+    const elements = Array.isArray(data.elements) ? data.elements : [];
+    state.nearbyResults = elements
+      .filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lon))
+      .map((item) => {
+        const distance = calcDistanceKm(lat, lng, item.lat, item.lon);
+        const tags = item.tags || {};
+        return {
+          id: `nearby_${item.id}`,
+          name:
+            tags.name ||
+            tags.official_name ||
+            tags.brand ||
+            [tags.amenity, tags.tourism, tags.leisure].filter(Boolean)[0] ||
+            "Nearby place",
+          address: [
+            tags["addr:housenumber"],
+            tags["addr:street"],
+            tags["addr:suburb"],
+            tags["addr:city"]
+          ]
+            .filter(Boolean)
+            .join(" "),
+          lat: String(item.lat),
+          lng: String(item.lon),
+          distanceKm: distance.toFixed(1)
+        };
+      })
+      .sort((a, b) => Number(a.distanceKm) - Number(b.distanceKm))
+      .slice(0, 12);
+
+    state.discoveryStatus = t("status_found_nearby", {
+      count: state.nearbyResults.length
+    });
+    state.discoveryStatusType = "success";
+  } catch (error) {
+    state.nearbyResults = [];
+    state.discoveryStatus = t("error_loading_nearby");
+    state.discoveryStatusType = "error";
+  }
+  render();
+}
+
 function syncDiscoveryInput() {
   const input = document.getElementById("place-query");
   if (input) input.value = state.discoveryQuery;
@@ -575,6 +651,7 @@ function mountMapIfNeeded() {
       name: state.customPinDraft.name || "",
       note: state.customPinDraft.note || ""
     };
+    loadNearbyRecommendations(lat, lng);
     render();
   });
 
@@ -654,4 +731,57 @@ function removeFavorite(favoriteId) {
   state.discoveryStatus = t("status_favorite_removed");
   state.discoveryStatusType = "success";
   render();
+}
+
+function addNearbyToTrip(index) {
+  const place = state.nearbyResults[index];
+  if (!place) return;
+  ensureEditingTrip();
+  state.editingTrip.itinerary.push({
+    id: uid("item"),
+    dayIndex: 1,
+    title: place.name,
+    startTime: "",
+    endTime: "",
+    placeName: place.name,
+    address: place.address || "",
+    lat: place.lat,
+    lng: place.lng,
+    note: ""
+  });
+  state.editorStatus = t("status_place_added");
+  state.editorStatusType = "success";
+  setPage("editor");
+}
+
+function saveNearbyToFavorite(index) {
+  const place = state.nearbyResults[index];
+  if (!place || !state.user) return;
+  saveFavorite(state.user.id, {
+    name: place.name,
+    address: place.address || "",
+    lat: place.lat,
+    lng: place.lng,
+    note: "",
+    source: "nearby"
+  });
+  hydrateUserData();
+  state.discoveryStatus = t("status_pin_saved");
+  state.discoveryStatusType = "success";
+  render();
+}
+
+function calcDistanceKm(lat1, lng1, lat2, lng2) {
+  const toRad = (value) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
 }

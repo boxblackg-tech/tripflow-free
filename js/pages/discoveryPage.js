@@ -105,6 +105,37 @@ export function renderDiscoveryPage(state) {
         <div class="sheet">
           <div class="top-bar" style="margin-bottom:12px;">
             <div>
+              <h3 style="margin:0;">${state.t("nearby_title")}</h3>
+              <div class="subtitle">${state.t("nearby_subtitle")}</div>
+            </div>
+          </div>
+          <div class="result-grid">
+            ${
+              state.nearbyResults.length
+                ? state.nearbyResults
+                    .map(
+                      (place, index) => `
+                      <article class="result-card">
+                        <h3 class="result-title">${escapeHtml(place.name || "Nearby place")}</h3>
+                        <div class="helper-text">${escapeHtml(place.address || "")}</div>
+                        <div class="meta-text tiny" style="margin-top:8px;">${state.t("result_coordinates", { lat: place.lat, lng: place.lng })}</div>
+                        <div class="meta-text tiny" style="margin-top:4px;">${state.t("nearby_distance", { distance: place.distanceKm })}</div>
+                        <div class="trip-actions" style="margin-top:12px;">
+                          <button class="mini-button soft" type="button" data-action="add-nearby-to-trip" data-place-index="${index}">${state.t("action_add_to_trip")}</button>
+                          <button class="mini-button light" type="button" data-action="save-nearby-to-favorite" data-place-index="${index}">${state.t("action_save_favorite")}</button>
+                        </div>
+                      </article>
+                    `
+                    )
+                    .join("")
+                : `<div class="empty-card">${state.t("empty_nearby")}</div>`
+            }
+          </div>
+        </div>
+
+        <div class="sheet">
+          <div class="top-bar" style="margin-bottom:12px;">
+            <div>
               <h3 style="margin:0;">${state.t("favorites_title")}</h3>
               <div class="subtitle">${state.t("action_save_favorite")}</div>
             </div>
