@@ -32,9 +32,11 @@ const state = {
   memoryStatus: "",
   memoryStatusType: "",
   discoveryQuery: "",
+  discoverySuggestions: [],
   discoveryResults: [],
   discoveryBounds: null,
   discoveryCenter: null,
+  selectedDiscoveryResultId: "",
   selectedCategory: "All",
   user: null,
   trips: [],
@@ -53,6 +55,7 @@ const state = {
 };
 
 let map = null;
+let discoverySuggestionTimer = null;
 
 bindGlobalEvents();
 registerServiceWorker();
@@ -109,7 +112,7 @@ function bindGlobalEvents() {
 
     if (!actionTarget) return;
 
-    const { action, tripId, placeIndex } = actionTarget.dataset;
+    const { action, tripId, placeIndex, suggestionIndex } = actionTarget.dataset;
 
     if (action === "logout") {
       clearSession();
@@ -166,6 +169,16 @@ function bindGlobalEvents() {
       return;
     }
 
+    if (action === "pick-discovery-suggestion") {
+      await applyDiscoverySuggestion(Number(suggestionIndex));
+      return;
+    }
+
+    if (action === "focus-discovery-result") {
+      focusDiscoveryResult(Number(placeIndex));
+      return;
+    }
+
     if (action === "save-memory") {
       await saveCurrentMemory();
       return;
@@ -173,6 +186,16 @@ function bindGlobalEvents() {
 
     if (action === "save-place-to-favorite") {
       await saveDiscoveryPlaceToFavorite(Number(placeIndex));
+      return;
+    }
+
+    if (action === "add-place-to-trip") {
+      addDiscoveryPlaceToTrip(Number(placeIndex));
+      return;
+    }
+
+    if (action === "use-current-location") {
+      await useCurrentLocation();
       return;
     }
 
@@ -188,14 +211,20 @@ function bindGlobalEvents() {
   });
 
   document.addEventListener("submit", async (event) => {
-    if (event.target.id !== "auth-form") return;
-    event.preventDefault();
-    await handleAuthSubmit(new FormData(event.target));
+    if (event.target.id === "auth-form") {
+      event.preventDefault();
+      await handleAuthSubmit(new FormData(event.target));
+    }
+    if (event.target.id === "discovery-search-form") {
+      event.preventDefault();
+      await runPlaceSearch();
+    }
   });
 
   document.addEventListener("input", (event) => {
     if (event.target.id === "place-query") {
       state.discoveryQuery = event.target.value;
+      scheduleDiscoverySuggestions(event.target.value);
     }
   });
 
@@ -264,6 +293,9 @@ function render() {
 }
 
 function setPage(page) {
+  if (page !== "discovery") {
+    state.discoverySuggestions = [];
+  }
   state.currentPage = page;
   if (page === "editor") ensureEditingTrip();
   render();
@@ -371,105 +403,28 @@ async function runPlaceSearch() {
   }
 
   state.discoveryQuery = query;
+  state.discoverySuggestions = [];
   state.discoveryStatus = t("status_searching");
   state.discoveryStatusType = "";
   render();
 
   try {
-    const queryCandidates = [`${query} province Thailand`, `${query} Thailand`, query];
-    let province = null;
+    const results = await searchNominatim(query, 12);
+    state.discoveryResults = results;
+    state.selectedDiscoveryResultId = results[0]?.id || "";
+    const bounds = computeBoundsFromResults(results);
+    state.discoveryBounds = bounds;
+    state.discoveryCenter = results[0]
+      ? { lat: Number(results[0].lat), lng: Number(results[0].lon) }
+      : state.discoveryCenter;
 
-    for (const candidate of queryCandidates) {
-      const provinceResponse = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&q=${encodeURIComponent(
-          candidate
-        )}`,
-        {
-          headers: { Accept: "application/json" }
-        }
-      );
-      const provinceData = await provinceResponse.json();
-      province = Array.isArray(provinceData) ? provinceData[0] : null;
-      if (province) break;
-    }
-
-    if (!province) {
-      state.discoveryResults = [];
-      state.discoveryBounds = null;
-      state.discoveryCenter = null;
-      state.discoveryStatus = t("error_province_not_found");
+    if (!results.length) {
+      state.discoveryStatus = t("error_search_no_results");
       state.discoveryStatusType = "error";
       render();
       return;
     }
 
-    const [south, north, west, east] = (province.boundingbox || []).map(Number);
-    const centerLat = Number(province.lat);
-    const centerLng = Number(province.lon);
-    state.discoveryBounds =
-      [south, north, west, east].every(Number.isFinite)
-        ? { south, north, west, east }
-        : null;
-    state.discoveryCenter =
-      Number.isFinite(centerLat) && Number.isFinite(centerLng)
-        ? { lat: centerLat, lng: centerLng }
-        : null;
-
-    const overpassQuery = `
-      [out:json][timeout:25];
-      (
-        node["tourism"~"attraction|museum|viewpoint|gallery|theme_park|zoo"](${south},${west},${north},${east});
-        way["tourism"~"attraction|museum|viewpoint|gallery|theme_park|zoo"](${south},${west},${north},${east});
-        node["historic"](${south},${west},${north},${east});
-        way["historic"](${south},${west},${north},${east});
-        node["leisure"~"park|nature_reserve"](${south},${west},${north},${east});
-        way["leisure"~"park|nature_reserve"](${south},${west},${north},${east});
-      );
-      out center 40;
-    `;
-
-    const resultsResponse = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "text/plain;charset=UTF-8"
-      },
-      body: overpassQuery
-    });
-    const resultsData = await resultsResponse.json();
-    const elements = Array.isArray(resultsData.elements) ? resultsData.elements : [];
-    state.discoveryResults = elements
-      .map((item) => {
-        const lat = Number(item.lat ?? item.center?.lat);
-        const lon = Number(item.lon ?? item.center?.lon);
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-        const tags = item.tags || {};
-        const name =
-          tags["name:th"] ||
-          tags.name ||
-          tags["official_name:th"] ||
-          tags.official_name ||
-          tags.tourism ||
-          tags.historic ||
-          tags.leisure ||
-          "Travel place";
-        const addressParts = [
-          tags["addr:subdistrict"],
-          tags["addr:district"],
-          tags["addr:province"],
-          query
-        ].filter(Boolean);
-        return {
-          id: `place_${item.type}_${item.id}`,
-          name,
-          display_name: Array.from(new Set(addressParts)).join(", "),
-          lat: String(lat),
-          lon: String(lon),
-          image: ""
-        };
-      })
-      .filter(Boolean)
-      .slice(0, 12);
     state.discoveryStatus = t("status_found_places", {
       count: state.discoveryResults.length
     });
@@ -482,6 +437,195 @@ async function runPlaceSearch() {
     state.discoveryStatusType = "error";
   }
   render();
+}
+
+function addDiscoveryPlaceToTrip(index) {
+  const place = state.discoveryResults[index];
+  if (!place) return;
+  ensureEditingTrip();
+  state.editingTrip.itinerary.push({
+    id: uid("item"),
+    dayIndex: 1,
+    title: place.name || (place.display_name || "").split(",")[0],
+    startTime: "",
+    endTime: "",
+    placeName: place.name || (place.display_name || "").split(",")[0],
+    address: place.display_name || "",
+    lat: place.lat || "",
+    lng: place.lon || "",
+    note: ""
+  });
+  state.editorStatus = t("status_place_added");
+  state.editorStatusType = "success";
+  setPage("editor");
+}
+
+function scheduleDiscoverySuggestions(query) {
+  window.clearTimeout(discoverySuggestionTimer);
+  const normalizedQuery = String(query || "").trim();
+  if (normalizedQuery.length < 2) {
+    state.discoverySuggestions = [];
+    if (state.currentPage === "discovery") render();
+    return;
+  }
+
+  discoverySuggestionTimer = window.setTimeout(async () => {
+    try {
+      const suggestions = await searchNominatim(normalizedQuery, 6);
+      if (state.discoveryQuery.trim() !== normalizedQuery) return;
+      state.discoverySuggestions = suggestions;
+      if (state.currentPage === "discovery") render();
+    } catch (error) {
+      state.discoverySuggestions = [];
+      if (state.currentPage === "discovery") render();
+    }
+  }, 450);
+}
+
+async function applyDiscoverySuggestion(index) {
+  const suggestion = state.discoverySuggestions[index];
+  if (!suggestion) return;
+  state.discoveryQuery = suggestion.name || suggestion.display_name || state.discoveryQuery;
+  state.discoverySuggestions = [];
+  state.discoveryResults = [suggestion];
+  state.selectedDiscoveryResultId = suggestion.id;
+  state.discoveryBounds = computeBoundsFromResults([suggestion]);
+  state.discoveryCenter = { lat: Number(suggestion.lat), lng: Number(suggestion.lon) };
+  state.discoveryStatus = t("status_selected_place", {
+    name: suggestion.name || suggestion.display_name || ""
+  });
+  state.discoveryStatusType = "success";
+  render();
+}
+
+function focusDiscoveryResult(index) {
+  const place = state.discoveryResults[index];
+  if (!place) return;
+  state.selectedDiscoveryResultId = place.id;
+  state.discoveryCenter = { lat: Number(place.lat), lng: Number(place.lon) };
+  render();
+}
+
+async function useCurrentLocation() {
+  if (!navigator.geolocation) {
+    state.discoveryStatus = t("error_location_failed");
+    state.discoveryStatusType = "error";
+    render();
+    return;
+  }
+
+  state.discoveryStatus = t("status_locating");
+  state.discoveryStatusType = "";
+  render();
+
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      try {
+        const place = await reverseLookup(lat, lng);
+        state.discoveryQuery = place.name || place.display_name || t("action_use_current_location");
+        state.discoverySuggestions = [];
+        state.discoveryResults = [place];
+        state.selectedDiscoveryResultId = place.id;
+        state.discoveryCenter = { lat, lng };
+        state.discoveryBounds = computeBoundsFromResults([place]);
+        state.discoveryStatus = t("status_selected_place", {
+          name: place.name || place.display_name || ""
+        });
+        state.discoveryStatusType = "success";
+      } catch (error) {
+        state.discoveryCenter = { lat, lng };
+        state.discoveryStatus = t("error_location_failed");
+        state.discoveryStatusType = "error";
+      }
+      render();
+    },
+    () => {
+      state.discoveryStatus = t("error_location_failed");
+      state.discoveryStatusType = "error";
+      render();
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 10000
+    }
+  );
+}
+
+async function searchNominatim(query, limit = 12) {
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=${limit}&addressdetails=1&namedetails=1&extratags=1&dedupe=1&accept-language=th,en&q=${encodeURIComponent(
+      query
+    )}`,
+    {
+      headers: { Accept: "application/json" }
+    }
+  );
+  const data = await response.json();
+  return (Array.isArray(data) ? data : []).map(normalizeSearchResult);
+}
+
+async function reverseLookup(lat, lng) {
+  const response = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&namedetails=1&accept-language=th,en&lat=${encodeURIComponent(
+      lat
+    )}&lon=${encodeURIComponent(lng)}`,
+    {
+      headers: { Accept: "application/json" }
+    }
+  );
+  const data = await response.json();
+  return normalizeSearchResult(data);
+}
+
+function normalizeSearchResult(place) {
+  const address = place.address || {};
+  const name =
+    place.name ||
+    place.namedetails?.name ||
+    place.namedetails?.["name:th"] ||
+    place.display_name?.split(",")?.[0] ||
+    "Pinned place";
+  const typeLabel = [place.type, place.class].filter(Boolean).join(" · ");
+
+  return {
+    id: place.place_id ? `nom_${place.place_id}` : uid("place"),
+    name,
+    display_name:
+      [
+        address.road,
+        address.suburb,
+        address.city,
+        address.town,
+        address.county,
+        address.state,
+        address.country
+      ]
+        .filter(Boolean)
+        .join(", ") || place.display_name || "",
+    lat: String(place.lat || ""),
+    lon: String(place.lon || ""),
+    image: "",
+    typeLabel
+  };
+}
+
+function computeBoundsFromResults(results) {
+  const points = results
+    .map((place) => [Number(place.lat), Number(place.lon)])
+    .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+
+  if (!points.length) return null;
+
+  const lats = points.map(([lat]) => lat);
+  const lngs = points.map(([, lng]) => lng);
+  return {
+    south: Math.min(...lats),
+    north: Math.max(...lats),
+    west: Math.min(...lngs),
+    east: Math.max(...lngs)
+  };
 }
 
 async function saveCurrentMemory() {
@@ -544,17 +688,56 @@ function mountMapIfNeeded() {
   }).addTo(map);
 
   const bounds = [];
+  let activeMarker = null;
   state.discoveryResults.forEach((place) => {
     const lat = Number(place.lat);
     const lng = Number(place.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
     const title = place.name || (place.display_name || "").split(",")[0] || "Place";
-    window.L.marker([lat, lng]).addTo(map).bindPopup(title);
+    const marker = window.L.marker([lat, lng]).addTo(map).bindPopup(
+      `<strong>${title}</strong><br>${place.display_name || ""}`
+    );
+    marker.on("click", () => {
+      state.selectedDiscoveryResultId = place.id;
+      render();
+    });
+    if (place.id === state.selectedDiscoveryResultId) {
+      activeMarker = marker;
+    }
     bounds.push([lat, lng]);
+  });
+
+  map.on("click", async (event) => {
+    state.discoveryStatus = t("status_loading_pin");
+    state.discoveryStatusType = "";
+    render();
+    try {
+      const place = await reverseLookup(event.latlng.lat, event.latlng.lng);
+      state.discoveryQuery = place.name || place.display_name || state.discoveryQuery;
+      state.discoverySuggestions = [];
+      state.discoveryResults = [place];
+      state.selectedDiscoveryResultId = place.id;
+      state.discoveryCenter = {
+        lat: Number(place.lat),
+        lng: Number(place.lon)
+      };
+      state.discoveryBounds = computeBoundsFromResults([place]);
+      state.discoveryStatus = t("status_selected_place", {
+        name: place.name || place.display_name || ""
+      });
+      state.discoveryStatusType = "success";
+    } catch (error) {
+      state.discoveryStatus = t("error_search_failed");
+      state.discoveryStatusType = "error";
+    }
+    render();
   });
 
   if (bounds.length) {
     map.fitBounds(bounds, { padding: [24, 24] });
+    if (activeMarker) {
+      window.setTimeout(() => activeMarker.openPopup(), 150);
+    }
     return;
   }
 

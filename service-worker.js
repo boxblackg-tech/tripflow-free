@@ -1,4 +1,4 @@
-const CACHE_NAME = "tripflow-free-v9";
+const CACHE_NAME = "tripflow-free-v10";
 const APP_ASSETS = [
   "./",
   "./index.html",
