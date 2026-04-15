@@ -1,4 +1,4 @@
-import { renderDashboardPage } from "./pages/dashboardPage.js";
+import { renderDashboardPage } from "./pages/dashboardHomePage.js";
 import { renderDiscoveryPage } from "./pages/discoveryPage.js";
 import { renderEditorPage } from "./pages/editorPage.js";
 import { renderLoginPage } from "./pages/loginPage.js";

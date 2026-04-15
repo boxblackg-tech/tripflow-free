@@ -519,6 +519,36 @@ button {
   background: rgba(255, 255, 255, 0.16);
 }
 
+.dashboard-screen {
+  overflow-x: clip;
+}
+
+.dashboard-content {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.dashboard-screen .top-bar,
+.dashboard-screen .summary-grid,
+.dashboard-screen .trip-grid,
+.dashboard-screen .trip-card,
+.dashboard-screen .trip-actions {
+  width: 100%;
+  max-width: 100%;
+}
+
+.dashboard-chip-row {
+  width: calc(100% + 18px);
+  max-width: calc(100% + 18px);
+  margin-right: -18px;
+  padding-right: 18px;
+}
+
+.dashboard-chip-row .filter-chip {
+  flex: 0 0 auto;
+}
+
 .fab {
   position: fixed;
   right: max(calc(50% - 196px + 18px), 18px);
@@ -560,6 +590,13 @@ button {
 
   .nav {
     width: calc(100% - 20px);
+  }
+
+  .dashboard-chip-row {
+    width: calc(100% + 14px);
+    max-width: calc(100% + 14px);
+    margin-right: -14px;
+    padding-right: 14px;
   }
 
   .fab {
