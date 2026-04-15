@@ -118,6 +118,7 @@ function ensureSheet(spreadsheet, sheetName, headers) {
 function recreateTables(spreadsheet) {
   dropTables(spreadsheet);
   ensureTables(spreadsheet);
+  deletePlaceholderSheet_(spreadsheet);
   return {
     ok: true,
     message: "Tables recreated.",
@@ -126,12 +127,31 @@ function recreateTables(spreadsheet) {
 }
 
 function dropTables(spreadsheet) {
-  Object.keys(TABLES).forEach(function(name) {
-    const sheet = spreadsheet.getSheetByName(name);
-    if (sheet) {
-      spreadsheet.deleteSheet(sheet);
-    }
+  const targetSheets = Object.keys(TABLES)
+    .map(function(name) {
+      return spreadsheet.getSheetByName(name);
+    })
+    .filter(Boolean);
+
+  if (!targetSheets.length) {
+    return {
+      ok: true,
+      message: "No tables to delete.",
+      tables: Object.keys(TABLES)
+    };
+  }
+
+  let sheetsToDelete = targetSheets.slice();
+  if (spreadsheet.getSheets().length === targetSheets.length) {
+    const placeholder = sheetsToDelete.shift();
+    placeholder.clear();
+    placeholder.setName("_tripflow_placeholder");
+  }
+
+  sheetsToDelete.forEach(function(sheet) {
+    spreadsheet.deleteSheet(sheet);
   });
+
   return {
     ok: true,
     message: "Tables deleted.",
@@ -420,4 +440,11 @@ function jsonResponse(data) {
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function deletePlaceholderSheet_(spreadsheet) {
+  const sheet = spreadsheet.getSheetByName("_tripflow_placeholder");
+  if (sheet && spreadsheet.getSheets().length > 1) {
+    spreadsheet.deleteSheet(sheet);
+  }
 }
