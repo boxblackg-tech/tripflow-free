@@ -1,3 +1,4 @@
+import { getSheetBackendConfig } from "./sheetConfig.js";
 import { byNewestDate, todayIso, uid } from "./utils.js";
 
 const KEYS = {
@@ -10,7 +11,89 @@ const KEYS = {
 
 const DEFAULT_CATEGORIES = ["Mountain", "Sea", "Cafe", "City", "Road Trip", "Family"];
 
-export function seedDemoData() {
+function read(key) {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function write(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function hasRemoteBackend() {
+  const config = getSheetBackendConfig();
+  return Boolean(config.webAppUrl);
+}
+
+async function callBackend(action, payload = {}) {
+  const config = getSheetBackendConfig();
+  if (!config.webAppUrl) {
+    throw new Error("Remote backend is not configured yet.");
+  }
+
+  const response = await fetch(config.webAppUrl, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "text/plain;charset=UTF-8"
+    },
+    body: JSON.stringify({
+      action,
+      spreadsheetId: config.spreadsheetId,
+      ...payload
+    })
+  });
+
+  const data = await response.json();
+  if (!data.ok) {
+    throw new Error(data.error || "Remote request failed.");
+  }
+  return data;
+}
+
+function syncLocalCollection(key, collection) {
+  write(key, collection);
+  return collection;
+}
+
+export function getConfig() {
+  return {
+    appName: "TripFlow Free",
+    categories: DEFAULT_CATEGORIES
+  };
+}
+
+export function getSession() {
+  try {
+    const raw = localStorage.getItem(KEYS.session);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+export function clearSession() {
+  localStorage.removeItem(KEYS.session);
+}
+
+export async function seedDemoData() {
+  if (hasRemoteBackend()) {
+    try {
+      const data = await callBackend("seedDemoData");
+      syncLocalCollection(KEYS.users, data.users || []);
+      syncLocalCollection(KEYS.trips, data.trips || []);
+      syncLocalCollection(KEYS.memories, data.memories || []);
+      syncLocalCollection(KEYS.favorites, data.favorites || []);
+      return;
+    } catch (error) {
+      console.warn("Remote seed failed, using local cache instead.", error);
+    }
+  }
+
   if (read(KEYS.users).length) return;
 
   const now = new Date().toISOString();
@@ -84,47 +167,16 @@ export function seedDemoData() {
   write(KEYS.users, users);
   write(KEYS.trips, trips);
   write(KEYS.memories, memories);
+  write(KEYS.favorites, []);
 }
 
-function read(key) {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : [];
-  } catch (error) {
-    return [];
+export async function registerUser({ name, email, password }) {
+  if (hasRemoteBackend()) {
+    const data = await callBackend("registerUser", { name, email, password });
+    localStorage.setItem(KEYS.session, JSON.stringify(data.user));
+    return data.user;
   }
-}
 
-function write(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
-export function getConfig() {
-  return {
-    appName: "TripFlow Free",
-    categories: DEFAULT_CATEGORIES,
-    discoveryTabs: [
-      { key: "cafe", label: "Cafe" },
-      { key: "restaurant", label: "Food" },
-      { key: "attraction", label: "Travel" }
-    ]
-  };
-}
-
-export function getSession() {
-  try {
-    const raw = localStorage.getItem(KEYS.session);
-    return raw ? JSON.parse(raw) : null;
-  } catch (error) {
-    return null;
-  }
-}
-
-export function clearSession() {
-  localStorage.removeItem(KEYS.session);
-}
-
-export function registerUser({ name, email, password }) {
   const users = read(KEYS.users);
   const normalizedEmail = String(email || "").trim().toLowerCase();
   if (!name || !normalizedEmail || !password) {
@@ -149,7 +201,13 @@ export function registerUser({ name, email, password }) {
   return safeUser(user);
 }
 
-export function loginUser({ email, password }) {
+export async function loginUser({ email, password }) {
+  if (hasRemoteBackend()) {
+    const data = await callBackend("loginUser", { email, password });
+    localStorage.setItem(KEYS.session, JSON.stringify(data.user));
+    return data.user;
+  }
+
   const users = read(KEYS.users);
   const normalizedEmail = String(email || "").trim().toLowerCase();
   const user = users.find(
@@ -176,14 +234,24 @@ function safeUser(user) {
   };
 }
 
-export function getTripsByUser(userId) {
+export async function getTripsByUser(userId) {
+  if (hasRemoteBackend()) {
+    try {
+      const data = await callBackend("getTripsByUser", { userId });
+      return syncLocalCollection(KEYS.trips, data.items || [])
+        .filter((trip) => trip.userId === userId)
+        .sort((a, b) => byNewestDate(a, b, "startDate"));
+    } catch (error) {
+      console.warn("Remote trips fetch failed, using local cache instead.", error);
+    }
+  }
+
   return read(KEYS.trips)
     .filter((trip) => trip.userId === userId)
     .sort((a, b) => byNewestDate(a, b, "startDate"));
 }
 
-export function saveTrip(userId, payload) {
-  const trips = read(KEYS.trips);
+export async function saveTrip(userId, payload) {
   const now = new Date().toISOString();
   const tripId = payload.id || uid("trip");
   const nextTrip = {
@@ -211,6 +279,12 @@ export function saveTrip(userId, payload) {
     }))
   };
 
+  if (hasRemoteBackend()) {
+    const data = await callBackend("saveTrip", { trip: nextTrip });
+    return data.item;
+  }
+
+  const trips = read(KEYS.trips);
   const index = trips.findIndex((trip) => trip.id === tripId);
   if (index >= 0) {
     trips[index] = nextTrip;
@@ -221,7 +295,12 @@ export function saveTrip(userId, payload) {
   return nextTrip;
 }
 
-export function deleteTrip(tripId) {
+export async function deleteTrip(tripId) {
+  if (hasRemoteBackend()) {
+    await callBackend("deleteTrip", { tripId });
+    return;
+  }
+
   write(
     KEYS.trips,
     read(KEYS.trips).filter((trip) => trip.id !== tripId)
@@ -232,14 +311,24 @@ export function deleteTrip(tripId) {
   );
 }
 
-export function getMemoriesByUser(userId) {
+export async function getMemoriesByUser(userId) {
+  if (hasRemoteBackend()) {
+    try {
+      const data = await callBackend("getMemoriesByUser", { userId });
+      return syncLocalCollection(KEYS.memories, data.items || [])
+        .filter((memory) => memory.userId === userId)
+        .sort((a, b) => byNewestDate(a, b, "memoryDate"));
+    } catch (error) {
+      console.warn("Remote memories fetch failed, using local cache instead.", error);
+    }
+  }
+
   return read(KEYS.memories)
     .filter((memory) => memory.userId === userId)
     .sort((a, b) => byNewestDate(a, b, "memoryDate"));
 }
 
-export function saveMemory(userId, payload) {
-  const memories = read(KEYS.memories);
+export async function saveMemory(userId, payload) {
   const now = new Date().toISOString();
   const memory = {
     id: payload.id || uid("mem"),
@@ -253,19 +342,36 @@ export function saveMemory(userId, payload) {
     lng: payload.lng || "",
     createdAt: payload.createdAt || now
   };
+
+  if (hasRemoteBackend()) {
+    const data = await callBackend("saveMemory", { memory });
+    return data.item;
+  }
+
+  const memories = read(KEYS.memories);
   memories.unshift(memory);
   write(KEYS.memories, memories);
   return memory;
 }
 
-export function getFavoritesByUser(userId) {
+export async function getFavoritesByUser(userId) {
+  if (hasRemoteBackend()) {
+    try {
+      const data = await callBackend("getFavoritesByUser", { userId });
+      return syncLocalCollection(KEYS.favorites, data.items || [])
+        .filter((favorite) => favorite.userId === userId)
+        .sort((a, b) => byNewestDate(a, b, "createdAt"));
+    } catch (error) {
+      console.warn("Remote favorites fetch failed, using local cache instead.", error);
+    }
+  }
+
   return read(KEYS.favorites)
     .filter((favorite) => favorite.userId === userId)
     .sort((a, b) => byNewestDate(a, b, "createdAt"));
 }
 
-export function saveFavorite(userId, payload) {
-  const favorites = read(KEYS.favorites);
+export async function saveFavorite(userId, payload) {
   const now = new Date().toISOString();
   const favorite = {
     id: payload.id || uid("fav"),
@@ -279,6 +385,12 @@ export function saveFavorite(userId, payload) {
     createdAt: payload.createdAt || now
   };
 
+  if (hasRemoteBackend()) {
+    const data = await callBackend("saveFavorite", { favorite });
+    return data.item;
+  }
+
+  const favorites = read(KEYS.favorites);
   const existingIndex = favorites.findIndex((item) => item.id === favorite.id);
   if (existingIndex >= 0) {
     favorites[existingIndex] = favorite;
@@ -289,7 +401,12 @@ export function saveFavorite(userId, payload) {
   return favorite;
 }
 
-export function deleteFavorite(favoriteId) {
+export async function deleteFavorite(favoriteId) {
+  if (hasRemoteBackend()) {
+    await callBackend("deleteFavorite", { favoriteId });
+    return;
+  }
+
   write(
     KEYS.favorites,
     read(KEYS.favorites).filter((favorite) => favorite.id !== favoriteId)

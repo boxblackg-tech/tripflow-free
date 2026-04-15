@@ -54,15 +54,24 @@ const state = {
 
 let map = null;
 
-seedDemoData();
-state.user = getSession();
-if (state.user) {
-  hydrateUserData();
-  state.currentPage = "dashboard";
-}
-render();
 bindGlobalEvents();
 registerServiceWorker();
+bootstrapApp();
+
+async function bootstrapApp() {
+  render();
+  try {
+    await seedDemoData();
+    state.user = getSession();
+    if (state.user) {
+      await hydrateUserData();
+      state.currentPage = "dashboard";
+    }
+  } catch (error) {
+    console.warn("Bootstrap failed.", error);
+  }
+  render();
+}
 
 function bindGlobalEvents() {
   document.addEventListener("click", async (event) => {
@@ -128,8 +137,8 @@ function bindGlobalEvents() {
 
     if (action === "delete-trip") {
       if (!window.confirm(t("confirm_delete_trip"))) return;
-      deleteTrip(tripId);
-      hydrateUserData();
+      await deleteTrip(tripId);
+      await hydrateUserData();
       setPage("dashboard");
       return;
     }
@@ -148,7 +157,7 @@ function bindGlobalEvents() {
     }
 
     if (action === "save-trip") {
-      saveCurrentTrip();
+      await saveCurrentTrip();
       return;
     }
 
@@ -158,12 +167,12 @@ function bindGlobalEvents() {
     }
 
     if (action === "save-memory") {
-      saveCurrentMemory();
+      await saveCurrentMemory();
       return;
     }
 
     if (action === "save-place-to-favorite") {
-      saveDiscoveryPlaceToFavorite(Number(placeIndex));
+      await saveDiscoveryPlaceToFavorite(Number(placeIndex));
       return;
     }
 
@@ -173,15 +182,15 @@ function bindGlobalEvents() {
     }
 
     if (action === "remove-favorite") {
-      removeFavorite(actionTarget.dataset.favoriteId);
+      await removeFavorite(actionTarget.dataset.favoriteId);
       return;
     }
   });
 
-  document.addEventListener("submit", (event) => {
+  document.addEventListener("submit", async (event) => {
     if (event.target.id !== "auth-form") return;
     event.preventDefault();
-    handleAuthSubmit(new FormData(event.target));
+    await handleAuthSubmit(new FormData(event.target));
   });
 
   document.addEventListener("input", (event) => {
@@ -193,7 +202,7 @@ function bindGlobalEvents() {
   document.addEventListener("click", (event) => {
     if (event.target.id !== "demo-login") return;
     state.authMode = "login";
-    handleAuthSubmit(
+    void handleAuthSubmit(
       new FormData(
         Object.assign(document.createElement("form"), {
           innerHTML: `
@@ -206,7 +215,7 @@ function bindGlobalEvents() {
   });
 }
 
-function handleAuthSubmit(formData) {
+async function handleAuthSubmit(formData) {
   try {
     const payload = {
       name: formData.get("name") || "",
@@ -214,11 +223,11 @@ function handleAuthSubmit(formData) {
       password: formData.get("password") || ""
     };
     const user =
-      state.authMode === "signup" ? registerUser(payload) : loginUser(payload);
+      state.authMode === "signup" ? await registerUser(payload) : await loginUser(payload);
     state.user = user;
     state.authStatus = "";
     state.authStatusType = "";
-    hydrateUserData();
+    await hydrateUserData();
     setPage("dashboard");
   } catch (error) {
     state.authStatus = translateError(error.message || String(error));
@@ -227,11 +236,11 @@ function handleAuthSubmit(formData) {
   }
 }
 
-function hydrateUserData() {
+async function hydrateUserData() {
   if (!state.user) return;
-  state.trips = getTripsByUser(state.user.id);
-  state.memories = getMemoriesByUser(state.user.id);
-  state.favorites = getFavoritesByUser(state.user.id);
+  state.trips = await getTripsByUser(state.user.id);
+  state.memories = await getMemoriesByUser(state.user.id);
+  state.favorites = await getFavoritesByUser(state.user.id);
   if (!state.memoryDraft.memoryDate) state.memoryDraft.memoryDate = todayIso();
 }
 
@@ -340,12 +349,12 @@ function collectTripForm() {
   };
 }
 
-function saveCurrentTrip() {
+async function saveCurrentTrip() {
   if (!state.user) return;
   const payload = collectTripForm();
-  const trip = saveTrip(state.user.id, payload);
+  const trip = await saveTrip(state.user.id, payload);
   state.editingTrip = clone(trip);
-  hydrateUserData();
+  await hydrateUserData();
   state.editorStatus = t("status_trip_saved");
   state.editorStatusType = "success";
   render();
@@ -475,7 +484,7 @@ async function runPlaceSearch() {
   render();
 }
 
-function saveCurrentMemory() {
+async function saveCurrentMemory() {
   if (!state.user) return;
   const payload = {
     tripId: document.getElementById("memory-trip")?.value || "",
@@ -494,8 +503,8 @@ function saveCurrentMemory() {
     return;
   }
 
-  saveMemory(state.user.id, payload);
-  hydrateUserData();
+  await saveMemory(state.user.id, payload);
+  await hydrateUserData();
   state.memoryDraft = {
     tripId: "",
     placeName: "",
@@ -592,10 +601,10 @@ function translateError(message) {
   return map[message] ? t(map[message]) : message;
 }
 
-function saveDiscoveryPlaceToFavorite(index) {
+async function saveDiscoveryPlaceToFavorite(index) {
   const place = state.discoveryResults[index];
   if (!place || !state.user) return;
-  saveFavorite(state.user.id, {
+  await saveFavorite(state.user.id, {
     name: place.name || (place.display_name || "").split(",")[0],
     address: place.display_name || "",
     lat: place.lat || "",
@@ -603,7 +612,7 @@ function saveDiscoveryPlaceToFavorite(index) {
     note: "",
     source: "search"
   });
-  hydrateUserData();
+  await hydrateUserData();
   state.discoveryStatus = t("status_pin_saved");
   state.discoveryStatusType = "success";
   render();
@@ -630,9 +639,9 @@ function addFavoriteToTrip(favoriteId) {
   setPage("editor");
 }
 
-function removeFavorite(favoriteId) {
-  deleteFavorite(favoriteId);
-  hydrateUserData();
+async function removeFavorite(favoriteId) {
+  await deleteFavorite(favoriteId);
+  await hydrateUserData();
   state.discoveryStatus = t("status_favorite_removed");
   state.discoveryStatusType = "success";
   render();

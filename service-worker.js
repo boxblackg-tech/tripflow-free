@@ -1,10 +1,11 @@
-const CACHE_NAME = "tripflow-free-v8";
+const CACHE_NAME = "tripflow-free-v9";
 const APP_ASSETS = [
   "./",
   "./index.html",
   "./styles/app.css",
   "./js/app.js",
   "./js/i18n.js",
+  "./js/sheetConfig.js",
   "./js/store.js",
   "./js/ui.js",
   "./js/utils.js",
