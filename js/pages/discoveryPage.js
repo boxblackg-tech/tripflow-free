@@ -8,8 +8,8 @@ export function renderDiscoveryPage(state) {
     <section class="screen ${state.currentPage === "discovery" ? "active" : ""}" data-screen="discovery">
       <div class="top-bar">
         <div>
-          <h1 class="section-title">Explore.</h1>
-          <div class="subtitle">Search cafes, food, and places to visit on an interactive map.</div>
+          <h1 class="section-title">${state.t("discovery_title")}</h1>
+          <div class="subtitle">${state.t("discovery_subtitle")}</div>
         </div>
         <button class="icon-button" type="button" data-page="dashboard">←</button>
       </div>
@@ -24,16 +24,16 @@ export function renderDiscoveryPage(state) {
                   class="filter-chip ${state.discoveryType === tab.key ? "active" : ""}"
                   type="button"
                   data-discovery-type="${tab.key}"
-                >${escapeHtml(tab.label)}</button>
+                >${escapeHtml(state.t(`discovery_${tab.key}`))}</button>
               `
               )
               .join("")}
           </div>
 
           <div class="form-grid" style="margin-top:12px;">
-            <input class="input" id="place-query" type="text" placeholder="Search city, district, or place" value="${escapeHtml(state.discoveryQuery || "")}">
-            <button class="primary-button" type="button" data-action="search-places">Search places</button>
-            <div class="status-text ${state.discoveryStatusType || ""}">${state.discoveryStatus || "Place results will be pinned on the map below."}</div>
+            <input class="input" id="place-query" type="text" placeholder="${state.t("placeholder_search_place")}" value="${escapeHtml(state.discoveryQuery || "")}">
+            <button class="primary-button" type="button" data-action="search-places">${state.t("action_search_places")}</button>
+            <div class="status-text ${state.discoveryStatusType || ""}">${state.discoveryStatus || state.t("discovery_default_status")}</div>
           </div>
         </div>
 
@@ -56,16 +56,16 @@ export function renderDiscoveryPage(state) {
                         <img src="${FALLBACK_IMAGE}" alt="${escapeHtml(title)}">
                         <h3 class="result-title">${escapeHtml(title)}</h3>
                         <div class="helper-text">${escapeHtml(place.display_name || "")}</div>
-                        <div class="meta-text tiny" style="margin-top:8px;">Coordinates: ${escapeHtml(latText)}, ${escapeHtml(lngText)}</div>
+                        <div class="meta-text tiny" style="margin-top:8px;">${state.t("result_coordinates", { lat: latText, lng: lngText })}</div>
                         <div class="trip-actions" style="margin-top:12px;">
-                          <button class="mini-button soft" type="button" data-action="add-place-to-trip" data-place-index="${index}">Add to trip</button>
-                          <button class="mini-button dark" type="button" data-action="add-place-to-memory" data-place-index="${index}">Save memory</button>
+                          <button class="mini-button soft" type="button" data-action="add-place-to-trip" data-place-index="${index}">${state.t("action_add_to_trip")}</button>
+                          <button class="mini-button dark" type="button" data-action="add-place-to-memory" data-place-index="${index}">${state.t("action_save_memory_short")}</button>
                         </div>
                       </article>
                     `;
                   })
                   .join("")
-              : `<div class="empty-card">No place results yet. Search an area to start exploring.</div>`
+              : `<div class="empty-card">${state.t("empty_places")}</div>`
           }
         </div>
       </div>

@@ -9,34 +9,35 @@ export function renderDashboardPage(state) {
       <div class="dashboard-content">
         <div class="top-bar">
           <div>
-            <h1 class="section-title">Today.</h1>
-            <div class="subtitle">Welcome back, ${escapeHtml(state.user?.name || "Traveler")}</div>
+            <h1 class="section-title">${state.t("dashboard_title")}</h1>
+            <div class="subtitle">${state.t("dashboard_welcome", { name: state.user?.name || "Traveler" })}</div>
           </div>
           <button class="icon-button" type="button" data-action="logout">☰</button>
         </div>
 
         <div class="summary-grid">
           <div class="summary-card">
-            <div class="meta-text">Trips</div>
+            <div class="meta-text">${state.t("metric_trips")}</div>
             <div class="summary-value">${state.trips.length}</div>
           </div>
           <div class="summary-card">
-            <div class="meta-text">Memories</div>
+            <div class="meta-text">${state.t("metric_memories")}</div>
             <div class="summary-value">${state.memories.length}</div>
           </div>
         </div>
 
         <div class="chip-row dashboard-chip-row" style="margin-top:18px;">
           ${categories
-            .map(
-              (category) => `
-              <button
-                type="button"
-                class="filter-chip ${state.selectedCategory === category ? "active" : ""}"
-                data-category="${escapeHtml(category)}"
-              >${escapeHtml(category)}</button>
-            `
-            )
+            .map((category) => {
+              const label = category === "All" ? state.t("filter_all") : state.tCategory(category);
+              return `
+                <button
+                  type="button"
+                  class="filter-chip ${state.selectedCategory === category ? "active" : ""}"
+                  data-category="${escapeHtml(category)}"
+                >${escapeHtml(label)}</button>
+              `;
+            })
             .join("")}
         </div>
 
@@ -57,19 +58,19 @@ export function renderDashboardPage(state) {
 
                     return `
                       <article class="trip-card">
-                        <div class="tiny">${escapeHtml(trip.category || "Trip")}</div>
+                        <div class="tiny">${escapeHtml(state.tCategory(trip.category || "City"))}</div>
                         <h3 class="trip-title">${escapeHtml(`${getCoverLabel(trip.cover)} ${trip.title}`)}</h3>
                         <div class="trip-meta">${escapeHtml(formatTripRange(trip.startDate, trip.endDate))}</div>
                         <div class="page-stack" style="margin-top:12px;">${preview}</div>
                         <div class="trip-actions" style="margin-top:14px;">
-                          <button class="mini-button light" type="button" data-action="edit-trip" data-trip-id="${trip.id}">Edit</button>
-                          <button class="mini-button dark" type="button" data-action="delete-trip" data-trip-id="${trip.id}">Delete</button>
+                          <button class="mini-button light" type="button" data-action="edit-trip" data-trip-id="${trip.id}">${state.t("action_edit")}</button>
+                          <button class="mini-button dark" type="button" data-action="delete-trip" data-trip-id="${trip.id}">${state.t("action_delete")}</button>
                         </div>
                       </article>
                     `;
                   })
                   .join("")
-              : `<div class="empty-card">No trips yet. Tap the plus button to create your first plan.</div>`
+              : `<div class="empty-card">${state.t("empty_trips")}</div>`
           }
         </div>
       </div>

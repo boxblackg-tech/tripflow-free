@@ -6,8 +6,20 @@ import { renderMemoryPage } from "./pages/memoryPage.js";
 
 export function renderApp(state) {
   const app = document.getElementById("app");
+  const navItems = [
+    ["dashboard", state.t("nav_trips"), "Home"],
+    ["discovery", state.t("nav_map"), "Map"],
+    ["memory", state.t("nav_memory"), "Star"],
+    ["editor", state.t("nav_editor"), "Edit"]
+  ];
+
   app.innerHTML = `
     <div class="app-shell">
+      <div class="lang-switch ${state.user ? "" : "login-mode"}">
+        <button class="lang-button ${state.lang === "en" ? "active" : ""}" type="button" data-lang="en">${state.t("lang_en")}</button>
+        <button class="lang-button ${state.lang === "th" ? "active" : ""}" type="button" data-lang="th">${state.t("lang_th")}</button>
+      </div>
+
       ${renderLoginPage(state)}
       ${renderDashboardPage(state)}
       ${renderEditorPage(state)}
@@ -17,12 +29,7 @@ export function renderApp(state) {
       <button class="fab ${state.user && state.currentPage === "dashboard" ? "" : "hidden"}" type="button" data-action="new-trip">+</button>
 
       <nav class="nav ${state.user ? "" : "hidden"}">
-        ${[
-          ["dashboard", "Trips", "Home"],
-          ["discovery", "Map", "Map"],
-          ["memory", "Memory", "Star"],
-          ["editor", "Editor", "Edit"]
-        ]
+        ${navItems
           .map(
             ([page, label, icon]) => `
             <button class="nav-button ${state.currentPage === page ? "active" : ""}" type="button" data-page="${page}">

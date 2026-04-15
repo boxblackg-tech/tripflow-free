@@ -5,8 +5,8 @@ export function renderMemoryPage(state) {
     <section class="screen ${state.currentPage === "memory" ? "active" : ""}" data-screen="memory">
       <div class="top-bar">
         <div>
-          <h1 class="section-title">Memories.</h1>
-          <div class="subtitle">Pin where you have been and build a travel timeline.</div>
+          <h1 class="section-title">${state.t("memory_title")}</h1>
+          <div class="subtitle">${state.t("memory_subtitle")}</div>
         </div>
         <button class="icon-button" type="button" data-page="dashboard">←</button>
       </div>
@@ -14,9 +14,9 @@ export function renderMemoryPage(state) {
       <div class="sheet">
         <div class="form-grid">
           <label class="field">
-            <span class="field-label">Trip</span>
+            <span class="field-label">${state.t("field_trip")}</span>
             <select class="select" id="memory-trip">
-              <option value="">No linked trip</option>
+              <option value="">${state.t("option_no_trip")}</option>
               ${state.trips
                 .map(
                   (trip) => `
@@ -28,38 +28,38 @@ export function renderMemoryPage(state) {
           </label>
 
           <label class="field">
-            <span class="field-label">Place</span>
-            <input class="input" id="memory-place" type="text" placeholder="Sunrise point" value="${escapeHtml(state.memoryDraft.placeName || "")}">
+            <span class="field-label">${state.t("field_place")}</span>
+            <input class="input" id="memory-place" type="text" placeholder="${state.t("placeholder_memory_place")}" value="${escapeHtml(state.memoryDraft.placeName || "")}">
           </label>
 
           <div class="split-grid">
             <label class="field">
-              <span class="field-label">Date</span>
+              <span class="field-label">${state.t("field_date")}</span>
               <input class="input" id="memory-date" type="date" value="${escapeHtml(state.memoryDraft.memoryDate || "")}">
             </label>
             <label class="field">
-              <span class="field-label">Photo URL</span>
+              <span class="field-label">${state.t("field_photo_url")}</span>
               <input class="input" id="memory-photo" type="url" placeholder="https://..." value="${escapeHtml(state.memoryDraft.photoUrl || "")}">
             </label>
           </div>
 
           <div class="split-grid">
             <label class="field">
-              <span class="field-label">Latitude</span>
+              <span class="field-label">${state.t("field_latitude")}</span>
               <input class="input" id="memory-lat" type="text" placeholder="13.7563" value="${escapeHtml(state.memoryDraft.lat || "")}">
             </label>
             <label class="field">
-              <span class="field-label">Longitude</span>
+              <span class="field-label">${state.t("field_longitude")}</span>
               <input class="input" id="memory-lng" type="text" placeholder="100.5018" value="${escapeHtml(state.memoryDraft.lng || "")}">
             </label>
           </div>
 
           <label class="field">
-            <span class="field-label">Memory note</span>
-            <textarea class="textarea" id="memory-note" placeholder="What made this stop special?">${escapeHtml(state.memoryDraft.note || "")}</textarea>
+            <span class="field-label">${state.t("field_memory_note")}</span>
+            <textarea class="textarea" id="memory-note" placeholder="${state.t("placeholder_memory_note")}">${escapeHtml(state.memoryDraft.note || "")}</textarea>
           </label>
 
-          <button class="primary-button" type="button" data-action="save-memory">Save memory</button>
+          <button class="primary-button" type="button" data-action="save-memory">${state.t("action_save_memory")}</button>
           <div class="status-text ${state.memoryStatusType || ""}">${state.memoryStatus || ""}</div>
         </div>
       </div>
@@ -74,14 +74,14 @@ export function renderMemoryPage(state) {
                     <article class="memory-card">
                       ${memory.photoUrl ? `<img src="${escapeHtml(memory.photoUrl)}" alt="${escapeHtml(memory.placeName)}">` : ""}
                       <div class="meta-text tiny">${escapeHtml(memory.memoryDate || "")}${trip ? ` - ${escapeHtml(trip.title)}` : ""}</div>
-                      <h3 class="memory-title">${escapeHtml(memory.placeName || "Memory pin")}</h3>
-                      <div class="helper-text">${escapeHtml(memory.note || "No note yet.")}</div>
-                      ${memory.lat && memory.lng ? `<div class="meta-text tiny" style="margin-top:8px;">Pinned at ${escapeHtml(memory.lat)}, ${escapeHtml(memory.lng)}</div>` : ""}
+                      <h3 class="memory-title">${escapeHtml(memory.placeName || state.t("memory_pin"))}</h3>
+                      <div class="helper-text">${escapeHtml(memory.note || state.t("memory_no_note"))}</div>
+                      ${memory.lat && memory.lng ? `<div class="meta-text tiny" style="margin-top:8px;">${state.t("memory_pinned_at", { lat: memory.lat, lng: memory.lng })}</div>` : ""}
                     </article>
                   `;
                 })
                 .join("")
-            : `<div class="empty-card">No memories saved yet. Add one to build your travel timeline.</div>`
+            : `<div class="empty-card">${state.t("empty_memories")}</div>`
         }
       </div>
     </section>

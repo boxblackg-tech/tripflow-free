@@ -46,6 +46,43 @@ body {
   overflow-x: hidden;
 }
 
+.lang-switch {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 10px 20px rgba(48, 60, 182, 0.12);
+}
+
+.lang-switch.login-mode {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.lang-button {
+  min-width: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: transparent;
+}
+
+.lang-switch.login-mode .lang-button {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.lang-button.active {
+  color: #ffffff;
+  background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+}
+
 button,
 input,
 textarea,
@@ -574,6 +611,11 @@ button {
 @media (max-width: 430px) {
   body {
     padding: 0;
+  }
+
+  .lang-switch {
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: 12px;
   }
 
   #app {

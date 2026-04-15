@@ -11,11 +11,13 @@ import {
   saveTrip,
   seedDemoData
 } from "./store.js";
+import { createTranslator, translateCategory } from "./i18n.js";
 import { renderApp } from "./ui.js";
 import { findTripById, todayIso, uid } from "./utils.js";
 
 const state = {
   config: getConfig(),
+  lang: localStorage.getItem("tripflow_free_lang") || "en",
   currentPage: "login",
   authMode: "login",
   authStatus: "",
@@ -46,7 +48,6 @@ const state = {
 };
 
 let map = null;
-let markers = [];
 
 seedDemoData();
 state.user = getSession();
@@ -65,11 +66,19 @@ function bindGlobalEvents() {
     const authModeTarget = event.target.closest("[data-auth-mode]");
     const categoryTarget = event.target.closest("[data-category]");
     const discoveryTypeTarget = event.target.closest("[data-discovery-type]");
+    const langTarget = event.target.closest("[data-lang]");
 
     if (authModeTarget) {
       state.authMode = authModeTarget.dataset.authMode;
       state.authStatus = "";
       state.authStatusType = "";
+      render();
+      return;
+    }
+
+    if (langTarget) {
+      state.lang = langTarget.dataset.lang;
+      localStorage.setItem("tripflow_free_lang", state.lang);
       render();
       return;
     }
@@ -120,7 +129,7 @@ function bindGlobalEvents() {
     }
 
     if (action === "delete-trip") {
-      if (!window.confirm("Delete this trip and all linked memories?")) return;
+      if (!window.confirm(t("confirm_delete_trip"))) return;
       deleteTrip(tripId);
       hydrateUserData();
       setPage("dashboard");
@@ -209,7 +218,7 @@ function handleAuthSubmit(formData) {
     hydrateUserData();
     setPage("dashboard");
   } catch (error) {
-    state.authStatus = error.message || String(error);
+    state.authStatus = translateError(error.message || String(error));
     state.authStatusType = "error";
     render();
   }
@@ -223,8 +232,11 @@ function hydrateUserData() {
 }
 
 function deriveState() {
+  const translator = createTranslator(state.lang);
   return {
     ...state,
+    t: translator,
+    tCategory: (category) => translateCategory(state.lang, category),
     filteredTrips: state.trips.filter(
       (trip) =>
         state.selectedCategory === "All" || trip.category === state.selectedCategory
@@ -330,7 +342,7 @@ function saveCurrentTrip() {
   const trip = saveTrip(state.user.id, payload);
   state.editingTrip = clone(trip);
   hydrateUserData();
-  state.editorStatus = "Trip saved.";
+  state.editorStatus = t("status_trip_saved");
   state.editorStatusType = "success";
   render();
 }
@@ -339,14 +351,14 @@ async function runPlaceSearch() {
   const queryInput = document.getElementById("place-query");
   const query = queryInput?.value.trim() || state.discoveryQuery.trim();
   if (!query) {
-    state.discoveryStatus = "Type an area or place name first.";
+    state.discoveryStatus = t("error_search_query");
     state.discoveryStatusType = "error";
     render();
     return;
   }
 
   state.discoveryQuery = query;
-  state.discoveryStatus = "Searching places...";
+  state.discoveryStatus = t("status_searching");
   state.discoveryStatusType = "";
   render();
 
@@ -367,11 +379,13 @@ async function runPlaceSearch() {
     });
     const data = await response.json();
     state.discoveryResults = Array.isArray(data) ? data : [];
-    state.discoveryStatus = `Found ${state.discoveryResults.length} places.`;
+    state.discoveryStatus = t("status_found_places", {
+      count: state.discoveryResults.length
+    });
     state.discoveryStatusType = "success";
   } catch (error) {
     state.discoveryResults = [];
-    state.discoveryStatus = "Search failed. Try another keyword or network.";
+    state.discoveryStatus = t("error_search_failed");
     state.discoveryStatusType = "error";
   }
   render();
@@ -393,7 +407,7 @@ function addDiscoveryPlaceToTrip(index) {
     lng: place.lon || "",
     note: ""
   });
-  state.editorStatus = "Place added to itinerary draft.";
+  state.editorStatus = t("status_place_added");
   state.editorStatusType = "success";
   setPage("editor");
 }
@@ -424,7 +438,7 @@ function saveCurrentMemory() {
   };
 
   if (!payload.placeName) {
-    state.memoryStatus = "Place is required.";
+    state.memoryStatus = t("error_place_required");
     state.memoryStatusType = "error";
     render();
     return;
@@ -441,7 +455,7 @@ function saveCurrentMemory() {
     lat: "",
     lng: ""
   };
-  state.memoryStatus = "Memory saved.";
+  state.memoryStatus = t("status_memory_saved");
   state.memoryStatusType = "success";
   render();
 }
@@ -456,7 +470,6 @@ function mountMapIfNeeded() {
     if (map) {
       map.remove();
       map = null;
-      markers = [];
     }
     return;
   }
@@ -471,15 +484,13 @@ function mountMapIfNeeded() {
     attribution: "&copy; OpenStreetMap"
   }).addTo(map);
 
-  markers = [];
   const bounds = [];
   state.discoveryResults.forEach((place) => {
     const lat = Number(place.lat);
     const lng = Number(place.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
     const title = (place.display_name || "").split(",")[0] || "Place";
-    const marker = window.L.marker([lat, lng]).addTo(map).bindPopup(title);
-    markers.push(marker);
+    window.L.marker([lat, lng]).addTo(map).bindPopup(title);
     bounds.push([lat, lng]);
   });
 
@@ -497,4 +508,17 @@ function registerServiceWorker() {
 
 function clone(value) {
   return value ? JSON.parse(JSON.stringify(value)) : value;
+}
+
+function t(key, vars) {
+  return createTranslator(state.lang)(key, vars);
+}
+
+function translateError(message) {
+  const map = {
+    "Please complete name, email, and password.": "error_complete_auth",
+    "This email is already registered.": "error_email_registered",
+    "Incorrect email or password.": "error_incorrect_login"
+  };
+  return map[message] ? t(map[message]) : message;
 }
