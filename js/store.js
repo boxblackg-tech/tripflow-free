@@ -4,7 +4,8 @@ const KEYS = {
   users: "tripflow_free_users",
   session: "tripflow_free_session",
   trips: "tripflow_free_trips",
-  memories: "tripflow_free_memories"
+  memories: "tripflow_free_memories",
+  favorites: "tripflow_free_favorites"
 };
 
 const DEFAULT_CATEGORIES = ["Mountain", "Sea", "Cafe", "City", "Road Trip", "Family"];
@@ -255,4 +256,42 @@ export function saveMemory(userId, payload) {
   memories.unshift(memory);
   write(KEYS.memories, memories);
   return memory;
+}
+
+export function getFavoritesByUser(userId) {
+  return read(KEYS.favorites)
+    .filter((favorite) => favorite.userId === userId)
+    .sort((a, b) => byNewestDate(a, b, "createdAt"));
+}
+
+export function saveFavorite(userId, payload) {
+  const favorites = read(KEYS.favorites);
+  const now = new Date().toISOString();
+  const favorite = {
+    id: payload.id || uid("fav"),
+    userId,
+    name: payload.name || "",
+    address: payload.address || "",
+    lat: payload.lat || "",
+    lng: payload.lng || "",
+    note: payload.note || "",
+    source: payload.source || "manual",
+    createdAt: payload.createdAt || now
+  };
+
+  const existingIndex = favorites.findIndex((item) => item.id === favorite.id);
+  if (existingIndex >= 0) {
+    favorites[existingIndex] = favorite;
+  } else {
+    favorites.unshift(favorite);
+  }
+  write(KEYS.favorites, favorites);
+  return favorite;
+}
+
+export function deleteFavorite(favoriteId) {
+  write(
+    KEYS.favorites,
+    read(KEYS.favorites).filter((favorite) => favorite.id !== favoriteId)
+  );
 }

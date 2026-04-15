@@ -2,11 +2,14 @@ import {
   clearSession,
   deleteTrip,
   getConfig,
+  getFavoritesByUser,
   getMemoriesByUser,
   getSession,
   getTripsByUser,
+  deleteFavorite,
   loginUser,
   registerUser,
+  saveFavorite,
   saveMemory,
   saveTrip,
   seedDemoData
@@ -35,7 +38,14 @@ const state = {
   user: null,
   trips: [],
   memories: [],
+  favorites: [],
   editingTrip: null,
+  customPinDraft: {
+    name: "",
+    lat: "",
+    lng: "",
+    note: ""
+  },
   memoryDraft: {
     tripId: "",
     placeName: "",
@@ -164,13 +174,33 @@ function bindGlobalEvents() {
       return;
     }
 
+    if (action === "save-custom-pin") {
+      saveCurrentPin();
+      return;
+    }
+
     if (action === "add-place-to-trip") {
       addDiscoveryPlaceToTrip(Number(placeIndex));
       return;
     }
 
+    if (action === "save-place-to-favorite") {
+      saveDiscoveryPlaceToFavorite(Number(placeIndex));
+      return;
+    }
+
     if (action === "add-place-to-memory") {
       addDiscoveryPlaceToMemory(Number(placeIndex));
+      return;
+    }
+
+    if (action === "use-favorite-in-trip") {
+      addFavoriteToTrip(actionTarget.dataset.favoriteId);
+      return;
+    }
+
+    if (action === "remove-favorite") {
+      removeFavorite(actionTarget.dataset.favoriteId);
       return;
     }
   });
@@ -184,6 +214,12 @@ function bindGlobalEvents() {
   document.addEventListener("input", (event) => {
     if (event.target.id === "place-query") {
       state.discoveryQuery = event.target.value;
+    }
+    if (event.target.id === "custom-pin-name") {
+      state.customPinDraft.name = event.target.value;
+    }
+    if (event.target.id === "custom-pin-note") {
+      state.customPinDraft.note = event.target.value;
     }
   });
 
@@ -228,6 +264,7 @@ function hydrateUserData() {
   if (!state.user) return;
   state.trips = getTripsByUser(state.user.id);
   state.memories = getMemoriesByUser(state.user.id);
+  state.favorites = getFavoritesByUser(state.user.id);
   if (!state.memoryDraft.memoryDate) state.memoryDraft.memoryDate = todayIso();
 }
 
@@ -460,6 +497,32 @@ function saveCurrentMemory() {
   render();
 }
 
+function saveCurrentPin() {
+  if (!state.user) return;
+  const payload = {
+    name: document.getElementById("custom-pin-name")?.value.trim() || "",
+    lat: document.getElementById("custom-pin-lat")?.value.trim() || "",
+    lng: document.getElementById("custom-pin-lng")?.value.trim() || "",
+    note: document.getElementById("custom-pin-note")?.value.trim() || "",
+    address: "",
+    source: "manual"
+  };
+
+  if (!payload.name) {
+    state.discoveryStatus = t("error_pin_name_required");
+    state.discoveryStatusType = "error";
+    render();
+    return;
+  }
+
+  saveFavorite(state.user.id, payload);
+  hydrateUserData();
+  state.customPinDraft = { name: "", lat: "", lng: "", note: "" };
+  state.discoveryStatus = t("status_pin_saved");
+  state.discoveryStatusType = "success";
+  render();
+}
+
 function syncDiscoveryInput() {
   const input = document.getElementById("place-query");
   if (input) input.value = state.discoveryQuery;
@@ -485,6 +548,7 @@ function mountMapIfNeeded() {
   }).addTo(map);
 
   const bounds = [];
+  let customMarker = null;
   state.discoveryResults.forEach((place) => {
     const lat = Number(place.lat);
     const lng = Number(place.lon);
@@ -492,6 +556,26 @@ function mountMapIfNeeded() {
     const title = (place.display_name || "").split(",")[0] || "Place";
     window.L.marker([lat, lng]).addTo(map).bindPopup(title);
     bounds.push([lat, lng]);
+  });
+
+  if (state.customPinDraft.lat && state.customPinDraft.lng) {
+    customMarker = window.L.marker([Number(state.customPinDraft.lat), Number(state.customPinDraft.lng)])
+      .addTo(map)
+      .bindPopup(state.customPinDraft.name || "Custom pin");
+    bounds.push([Number(state.customPinDraft.lat), Number(state.customPinDraft.lng)]);
+  }
+
+  map.on("click", (event) => {
+    const lat = event.latlng.lat.toFixed(6);
+    const lng = event.latlng.lng.toFixed(6);
+    state.customPinDraft = {
+      ...state.customPinDraft,
+      lat,
+      lng,
+      name: state.customPinDraft.name || "",
+      note: state.customPinDraft.note || ""
+    };
+    render();
   });
 
   if (bounds.length) {
@@ -521,4 +605,50 @@ function translateError(message) {
     "Incorrect email or password.": "error_incorrect_login"
   };
   return map[message] ? t(map[message]) : message;
+}
+
+function saveDiscoveryPlaceToFavorite(index) {
+  const place = state.discoveryResults[index];
+  if (!place || !state.user) return;
+  saveFavorite(state.user.id, {
+    name: (place.display_name || "").split(",")[0],
+    address: place.display_name || "",
+    lat: place.lat || "",
+    lng: place.lon || "",
+    note: "",
+    source: "search"
+  });
+  hydrateUserData();
+  state.discoveryStatus = t("status_pin_saved");
+  state.discoveryStatusType = "success";
+  render();
+}
+
+function addFavoriteToTrip(favoriteId) {
+  const favorite = state.favorites.find((item) => item.id === favoriteId);
+  if (!favorite) return;
+  ensureEditingTrip();
+  state.editingTrip.itinerary.push({
+    id: uid("item"),
+    dayIndex: 1,
+    title: favorite.name,
+    startTime: "",
+    endTime: "",
+    placeName: favorite.name,
+    address: favorite.address,
+    lat: favorite.lat,
+    lng: favorite.lng,
+    note: favorite.note || ""
+  });
+  state.editorStatus = t("status_place_added");
+  state.editorStatusType = "success";
+  setPage("editor");
+}
+
+function removeFavorite(favoriteId) {
+  deleteFavorite(favoriteId);
+  hydrateUserData();
+  state.discoveryStatus = t("status_favorite_removed");
+  state.discoveryStatusType = "success";
+  render();
 }

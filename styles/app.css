@@ -47,10 +47,23 @@ body {
 }
 
 .lang-switch {
-  position: absolute;
-  top: 16px;
-  right: 16px;
+  position: relative;
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 0;
+}
+
+.lang-switch > div,
+.lang-switch {
   z-index: 30;
+}
+
+.lang-switch {
+  display: flex;
+}
+
+.lang-switch-group {
   display: inline-flex;
   gap: 4px;
   padding: 4px;
@@ -59,7 +72,7 @@ body {
   box-shadow: 0 10px 20px rgba(48, 60, 182, 0.12);
 }
 
-.lang-switch.login-mode {
+.lang-switch.login-mode .lang-switch-group {
   background: rgba(255, 255, 255, 0.18);
 }
 
@@ -111,7 +124,7 @@ button {
   width: 100%;
   max-width: 100%;
   min-height: calc(100vh - 32px);
-  padding: 24px 18px calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 18px);
+  padding: 14px 18px calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 18px);
   overflow-x: hidden;
 }
 
@@ -496,6 +509,10 @@ button {
   box-shadow: 0 18px 28px rgba(48, 60, 182, 0.14);
 }
 
+.discovery-map-page .map-frame {
+  height: 320px;
+}
+
 #discovery-map {
   width: 100%;
   height: 100%;
@@ -614,8 +631,7 @@ button {
   }
 
   .lang-switch {
-    top: calc(10px + env(safe-area-inset-top, 0px));
-    right: 12px;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 0;
   }
 
   #app {
