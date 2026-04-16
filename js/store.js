@@ -11,6 +11,37 @@ const KEYS = {
 
 const DEFAULT_CATEGORIES = ["Mountain", "Sea", "Cafe", "City", "Road Trip", "Family"];
 
+function normalizeDateOnly(value) {
+  const raw = String(value ?? "");
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      const year = parsed.getFullYear();
+      const month = String(parsed.getMonth() + 1).padStart(2, "0");
+      const day = String(parsed.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+  }
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : raw;
+}
+
+function normalizeTrip(trip) {
+  return {
+    ...trip,
+    startDate: normalizeDateOnly(trip?.startDate),
+    endDate: normalizeDateOnly(trip?.endDate)
+  };
+}
+
+function normalizeMemory(memory) {
+  return {
+    ...memory,
+    memoryDate: normalizeDateOnly(memory?.memoryDate)
+  };
+}
+
 function read(key) {
   try {
     const value = localStorage.getItem(key);
@@ -203,15 +234,21 @@ export async function registerUser({ name, email, password }) {
 
 export async function loginUser({ email, password }) {
   if (hasRemoteBackend()) {
-    const data = await callBackend("loginUser", { email, password });
-    localStorage.setItem(KEYS.session, JSON.stringify(data.user));
-    return data.user;
+    try {
+      const data = await callBackend("loginUser", { email, password });
+      localStorage.setItem(KEYS.session, JSON.stringify(data.user));
+      return data.user;
+    } catch (error) {
+      console.warn("Remote login failed, trying local cache instead.", error);
+    }
   }
 
   const users = read(KEYS.users);
   const normalizedEmail = String(email || "").trim().toLowerCase();
   const user = users.find(
-    (item) => item.email === normalizedEmail && item.password === String(password || "")
+    (item) =>
+      item.email === normalizedEmail &&
+      String(item.password || "") === String(password || "")
   );
 
   if (!user) {
@@ -238,7 +275,7 @@ export async function getTripsByUser(userId) {
   if (hasRemoteBackend()) {
     try {
       const data = await callBackend("getTripsByUser", { userId });
-      return syncLocalCollection(KEYS.trips, data.items || [])
+      return syncLocalCollection(KEYS.trips, (data.items || []).map(normalizeTrip))
         .filter((trip) => trip.userId === userId)
         .sort((a, b) => byNewestDate(a, b, "startDate"));
     } catch (error) {
@@ -247,6 +284,7 @@ export async function getTripsByUser(userId) {
   }
 
   return read(KEYS.trips)
+    .map(normalizeTrip)
     .filter((trip) => trip.userId === userId)
     .sort((a, b) => byNewestDate(a, b, "startDate"));
 }
@@ -281,7 +319,7 @@ export async function saveTrip(userId, payload) {
 
   if (hasRemoteBackend()) {
     const data = await callBackend("saveTrip", { trip: nextTrip });
-    return data.item;
+    return normalizeTrip(data.item);
   }
 
   const trips = read(KEYS.trips);
@@ -292,7 +330,7 @@ export async function saveTrip(userId, payload) {
     trips.unshift(nextTrip);
   }
   write(KEYS.trips, trips);
-  return nextTrip;
+  return normalizeTrip(nextTrip);
 }
 
 export async function deleteTrip(tripId) {
@@ -315,7 +353,7 @@ export async function getMemoriesByUser(userId) {
   if (hasRemoteBackend()) {
     try {
       const data = await callBackend("getMemoriesByUser", { userId });
-      return syncLocalCollection(KEYS.memories, data.items || [])
+      return syncLocalCollection(KEYS.memories, (data.items || []).map(normalizeMemory))
         .filter((memory) => memory.userId === userId)
         .sort((a, b) => byNewestDate(a, b, "memoryDate"));
     } catch (error) {
@@ -324,6 +362,7 @@ export async function getMemoriesByUser(userId) {
   }
 
   return read(KEYS.memories)
+    .map(normalizeMemory)
     .filter((memory) => memory.userId === userId)
     .sort((a, b) => byNewestDate(a, b, "memoryDate"));
 }
@@ -345,13 +384,13 @@ export async function saveMemory(userId, payload) {
 
   if (hasRemoteBackend()) {
     const data = await callBackend("saveMemory", { memory });
-    return data.item;
+    return normalizeMemory(data.item);
   }
 
   const memories = read(KEYS.memories);
   memories.unshift(memory);
   write(KEYS.memories, memories);
-  return memory;
+  return normalizeMemory(memory);
 }
 
 export async function getFavoritesByUser(userId) {

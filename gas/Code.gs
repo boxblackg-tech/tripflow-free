@@ -194,8 +194,13 @@ function writeRows(spreadsheet, sheetName, items) {
 
 function normalizeItem(sheetName, item) {
   if (sheetName === "trips") {
+    item.startDate = normalizeDateOnly_(item.startDate);
+    item.endDate = normalizeDateOnly_(item.endDate);
     item.itinerary = safeJsonParse(item.itineraryJson, []);
     delete item.itineraryJson;
+  }
+  if (sheetName === "memories") {
+    item.memoryDate = normalizeDateOnly_(item.memoryDate);
   }
   return item;
 }
@@ -215,6 +220,21 @@ function safeJsonParse(value, fallback) {
   } catch (error) {
     return fallback;
   }
+}
+
+function normalizeDateOnly_(value) {
+  if (!value) return "";
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+  const raw = String(value);
+  if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+    const parsed = new Date(raw);
+    if (!isNaN(parsed.getTime())) {
+      return Utilities.formatDate(parsed, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    }
+  }
+  return raw.slice(0, 10);
 }
 
 function seedDemoData(spreadsheet) {
@@ -334,7 +354,7 @@ function loginUser(spreadsheet, payload) {
   const users = getRows(spreadsheet, "users");
   const normalizedEmail = String(payload.email || "").trim().toLowerCase();
   const user = users.find(function(item) {
-    return item.email === normalizedEmail && item.password === String(payload.password || "");
+    return item.email === normalizedEmail && String(item.password || "") === String(payload.password || "");
   });
 
   if (!user) {

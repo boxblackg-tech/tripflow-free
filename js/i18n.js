@@ -8,7 +8,8 @@ const translations = {
     lang_en: "EN",
     lang_th: "TH",
     login_title: "Plan beautifully.<br>Travel smoothly.",
-    login_subtitle: "Create trips, search places on a live map, and save memories in one mobile app.",
+    login_subtitle:
+      "Create trips, search places on a live map, and save memories in one mobile app.",
     auth_login: "LOG IN",
     auth_signup: "SIGN UP",
     field_name: "Name",
@@ -20,6 +21,7 @@ const translations = {
     action_use_demo: "Use demo account",
     helper_local_storage: "All data stays on this device with free local storage.",
     status_demo_login: "Demo login: demo@tripflow.app / 1234",
+    status_preparing_demo: "Preparing demo account...",
     dashboard_title: "Today.",
     dashboard_welcome: "Welcome back, {{name}}",
     metric_trips: "Trips",
@@ -60,14 +62,18 @@ const translations = {
     action_save_trip: "Save Trip",
     action_new_blank: "New Blank",
     discovery_title: "Explore.",
-    discovery_subtitle: "Search places like a real map app, tap the map, and save the spots you love.",
+    discovery_subtitle:
+      "Search places like a real map app, tap the map, and save the spots you love.",
     field_province: "Search",
-    placeholder_search_place: "Search places, cafes, restaurants, temples, neighborhoods",
+    placeholder_search_place:
+      "Search places, cafes, restaurants, temples, neighborhoods",
     action_search_places: "Search",
     action_use_current_location: "My location",
     action_view_on_map: "View on map",
-    discovery_default_status: "Search a place, choose a suggestion, or tap the map to pin a location.",
-    discovery_helper_live: "Examples: Ari cafe, Wat Arun, Phuket old town, restaurant Pattaya",
+    discovery_default_status:
+      "Search a place, choose a suggestion, or tap the map to pin a location.",
+    discovery_helper_live:
+      "Examples: Ari cafe, Wat Arun, Phuket old town, restaurant Pattaya",
     discovery_results_title: "Results",
     discovery_results_subtitle: "Tap a result to move the map and save it to your trip.",
     result_coordinates: "Coordinates: {{lat}}, {{lng}}",
@@ -147,6 +153,7 @@ const translations = {
     action_use_demo: "ใช้บัญชีเดโม",
     helper_local_storage: "ข้อมูลทั้งหมดถูกเก็บไว้ในอุปกรณ์นี้ด้วย local storage ฟรี",
     status_demo_login: "เดโมล็อกอิน: demo@tripflow.app / 1234",
+    status_preparing_demo: "กำลังเตรียมบัญชีเดโม...",
     dashboard_title: "วันนี้.",
     dashboard_welcome: "ยินดีต้อนรับกลับ, {{name}}",
     metric_trips: "ทริป",

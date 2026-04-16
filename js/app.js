@@ -31,6 +31,7 @@ const state = {
   discoveryStatusType: "",
   memoryStatus: "",
   memoryStatusType: "",
+  isBootstrapping: true,
   discoveryQuery: "",
   discoverySuggestions: [],
   discoveryResults: [],
@@ -59,7 +60,7 @@ let discoverySuggestionTimer = null;
 
 bindGlobalEvents();
 registerServiceWorker();
-bootstrapApp();
+const bootstrapPromise = bootstrapApp();
 
 async function bootstrapApp() {
   render();
@@ -72,6 +73,8 @@ async function bootstrapApp() {
     }
   } catch (error) {
     console.warn("Bootstrap failed.", error);
+  } finally {
+    state.isBootstrapping = false;
   }
   render();
 }
@@ -228,10 +231,15 @@ function bindGlobalEvents() {
     }
   });
 
-  document.addEventListener("click", (event) => {
-    if (event.target.id !== "demo-login") return;
+  document.addEventListener("click", async (event) => {
+    const demoTarget = event.target.closest("#demo-login");
+    if (!demoTarget) return;
     state.authMode = "login";
-    void handleAuthSubmit(
+    state.authStatus = t("status_preparing_demo");
+    state.authStatusType = "";
+    render();
+    await bootstrapPromise;
+    await handleAuthSubmit(
       new FormData(
         Object.assign(document.createElement("form"), {
           innerHTML: `
@@ -267,9 +275,14 @@ async function handleAuthSubmit(formData) {
 
 async function hydrateUserData() {
   if (!state.user) return;
-  state.trips = await getTripsByUser(state.user.id);
-  state.memories = await getMemoriesByUser(state.user.id);
-  state.favorites = await getFavoritesByUser(state.user.id);
+  const [trips, memories, favorites] = await Promise.all([
+    getTripsByUser(state.user.id),
+    getMemoriesByUser(state.user.id),
+    getFavoritesByUser(state.user.id)
+  ]);
+  state.trips = trips;
+  state.memories = memories;
+  state.favorites = favorites;
   if (!state.memoryDraft.memoryDate) state.memoryDraft.memoryDate = todayIso();
 }
 
